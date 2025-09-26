@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Applicant {
+  id        Int      @id @default(autoincrement())
+  firstName String
+  lastName  String
+  phone     String
+  email     String
+  gender    String?
+  address   String?
+  state     String?
+  age       Int?
+  cv        String?   // file path or cloud URL
+  nysc      String?   // file path or cloud URL
+  score     Int?      // test score
+  passed    Boolean?  // did they pass test?
+  nbcAssessmentDate   DateTime? // client assessment date
+  nbcPassed           Boolean?  // result of NBC assessment
+  interviewDate       DateTime?
+  interviewLink       String?
+  trainingDate        DateTime?
+  trainingLocation    String?
+  stage               String?   @default("Applied") 
+  createdAt DateTime  @default(now())
+}
+
