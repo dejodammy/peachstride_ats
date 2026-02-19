@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === "POST") {
     try {
-      const { firstName, lastName, phone, email, gender, address, state, age, cv, nysc } = req.body;
+      const { firstName, lastName, phone, email, gender, address, state, age, cv, nysc , jobId} = req.body;
 
       const applicant = await prisma.applicant.create({
         data: {
@@ -17,9 +17,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           gender,
           address,
           state,
-          age,
+          age: age ? Number(age) : null,
           cv,
           nysc,
+          job: jobId ? { connect: { id: jobId } } : undefined,
         }
       });
 

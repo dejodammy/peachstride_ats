@@ -7,27 +7,71 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Applicant {
-  id        Int      @id @default(autoincrement())
-  firstName String
-  lastName  String
-  phone     String
-  email     String
-  gender    String?
-  address   String?
-  state     String?
-  age       Int?
-  cv        String?   // file path or cloud URL
-  nysc      String?   // file path or cloud URL
-  score     Int?      // test score
-  passed    Boolean?  // did they pass test?
-  nbcAssessmentDate   DateTime? // client assessment date
-  nbcPassed           Boolean?  // result of NBC assessment
-  interviewDate       DateTime?
-  interviewLink       String?
-  trainingDate        DateTime?
-  trainingLocation    String?
-  stage               String?   @default("Applied") 
-  createdAt DateTime  @default(now())
+model User {
+  id          Int        @id @default(autoincrement())
+  email       String     @unique
+  password    String
+  role        String     @default("candidate") // 'admin' or 'candidate'
+  candidateId Int? // links to Applicant if this user is a candidate
+  candidate   Applicant? @relation(fields: [candidateId], references: [id])
 }
 
+model Applicant {
+  id                Int       @id @default(autoincrement())
+  firstName         String
+  lastName          String
+  phone             String    @unique
+  email             String    @unique
+  gender            String?
+  address           String?
+  state             String?
+  age               Int?
+  cv                String?
+  nysc              String?
+  score             Int? // test score
+  passed            Boolean? // did they pass test?
+  nbcAssessmentDate DateTime? // client assessment date
+  nbcPassed         Boolean? // result of NBC assessment
+  interviewDate     DateTime?
+  interviewLink     String?
+  interviewPassed   Boolean?
+  interviewComment  String?
+  trainingDate      DateTime?
+  trainingLocation  String?
+  trainingPassed    Boolean?
+  trainingComment   String?
+  stage             String?   @default("Applied")
+  createdAt         DateTime  @default(now())
+  password         String?
+
+  jobId             Int?
+  job               Job?       @relation(fields: [jobId], references: [id])
+
+  User User[]
+}
+
+model Job {
+  id            Int        @id @default(autoincrement())
+  title         String
+  description   String
+  location      String
+  type          String
+  department    String
+  posted        String      // e.g. "2 days ago" — or you can use DateTime if preferred
+  requirements  Json 
+  createdAt     DateTime    @default(now())
+
+  // Relation: One job can have many applicants
+  applicants    Applicant[]
+
+  // Relation: Each job can have many questions
+  questions     Question[]
+}
+model Question {
+  id         Int      @id @default(autoincrement())
+  question   String
+  options    Json   // could be stored as JSON or comma-separated text
+  answer     String
+  jobId      Int
+  job        Job      @relation(fields: [jobId], references: [id])
+}

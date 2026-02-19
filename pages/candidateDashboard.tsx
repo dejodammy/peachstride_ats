@@ -1,7 +1,25 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import { getSession, signOut } from "next-auth/react"; // ✅ added signOut
 import "tailwindcss/tailwind.css";
 
+
+export async function getServerSideProps(context) {
+  const session = await getSession(context);
+
+  if (!session) {
+    return {
+      redirect: {
+        destination: "/login",
+        permanent: false,
+      },
+    };
+  }
+
+  return {
+    props: { user: session.user },
+  };
+}
 export default function CandidateDashboard() {
   const [candidate, setCandidate] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -34,18 +52,64 @@ export default function CandidateDashboard() {
     fetchCandidate();
   }, [router]);
 
-  const getStageInfo = (stage: string) => {
-    const stages = {
-      "Application Received": { color: "#848688", icon: "document", progress: 20 },
-      "Test Scheduled": { color: "#ed3237", icon: "clock", progress: 40 },
-      "Test Completed": { color: "#10b981", icon: "check", progress: 50 },
-      "NBC Assessment": { color: "#ed3237", icon: "academic-cap", progress: 60 },
-      "Interview Scheduled": { color: "#f59e0b", icon: "video-camera", progress: 80 },
-      "Training": { color: "#10b981", icon: "users", progress: 90 },
-      "Completed": { color: "#10b981", icon: "badge-check", progress: 100 }
-    };
-    return stages[stage] || { color: "#848688", icon: "document", progress: 0 };
+  // Dynamic stage determination based on database fields
+const getCurrentStage = (candidate: any) => {
+  if (!candidate) return "Applied";
+
+  // 1. In-house test
+  if (candidate.score === null) {
+    return "Applied - Awaiting In-house Test";
+  }
+  if (candidate.score < 70 || candidate.passed === false) {
+    return "In-house Test Failed";
+  }
+
+  // 2. NBC Assessment
+  if (candidate.nbcAssessmentDate === null) {
+    return "NBC Assessment Pending";
+  }
+  if (candidate.nbcPassed === false) {
+    return "NBC Assessment Failed";
+  }
+
+  // 3. Interview
+  if (candidate.interviewDate === null) {
+    return "Interview Scheduling";
+  }
+
+  // 4. Training
+  if (candidate.trainingDate === null) {
+    return "Training Scheduling";
+  }
+
+  // ✅ New conditions for training results
+  if (candidate.trainingPassed === false) {
+    return "Training Failed";
+  }
+  if (candidate.trainingPassed === true) {
+    return "Completed";
+  }
+
+  // Default
+  return "Training Scheduled";
+};
+
+const getStageInfo = (stage: string) => {
+  const stages = {
+    "Applied": { color: "#848688", icon: "document", progress: 10 },
+    "Applied - Awaiting In-house Test": { color: "#848688", icon: "clock", progress: 15 },
+    "In-house Test Failed": { color: "#dc2626", icon: "x", progress: 25 },
+    "NBC Assessment Pending": { color: "#f59e0b", icon: "academic-cap", progress: 35 },
+    "NBC Assessment Failed": { color: "#dc2626", icon: "x", progress: 45 },
+    "Interview Scheduling": { color: "#f59e0b", icon: "video-camera", progress: 60 },
+    "Training Scheduling": { color: "#10b981", icon: "users", progress: 80 },
+    "Training Scheduled": { color: "#10b981", icon: "users", progress: 85 },
+    "Training Failed": { color: "#dc2626", icon: "x", progress: 90 },
+    "Completed": { color: "#10b981", icon: "badge-check", progress: 100 }
   };
+  return stages[stage] || { color: "#848688", icon: "document", progress: 0 };
+};
+
 
   const getIconSvg = (iconName: string) => {
     const icons = {
@@ -56,6 +120,7 @@ export default function CandidateDashboard() {
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
       ),
       check: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />,
+      x: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />,
       "academic-cap": (
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
       ),
@@ -71,6 +136,22 @@ export default function CandidateDashboard() {
     };
     return icons[iconName] || icons.document;
   };
+
+const getStageMessage = (stage: string) => {
+  const messages = {
+    "Applied": "Your application has been received and is under review.",
+    "Applied - Awaiting In-house Test": "Your in-house test will be scheduled soon.",
+    "In-house Test Failed": "Unfortunately, you did not pass the in-house test.",
+    "NBC Assessment Pending": "Your NBC assessment date will be updated soon.",
+    "NBC Assessment Failed": "You did not pass the NBC assessment.",
+    "Interview Scheduling": "Your interview will be scheduled soon.",
+    "Training Scheduling": "Your training date and location will be updated soon.",
+    "Training Scheduled": "You're almost there! Please attend your scheduled training.",
+    "Training Failed": "Unfortunately, you did not pass training. Please contact HR.",
+    "Completed": "🎉 Congratulations! You successfully completed all stages."
+  };
+  return messages[stage] || "Your application is being processed.";
+};
 
   if (loading) {
     return (
@@ -90,7 +171,8 @@ export default function CandidateDashboard() {
 
   if (!candidate) return null;
 
-  const stageInfo = getStageInfo(candidate.stage);
+  const currentStage = getCurrentStage(candidate);
+  const stageInfo = getStageInfo(currentStage);
 
   return (
     <div className="min-h-screen" style={{ 
@@ -121,6 +203,16 @@ export default function CandidateDashboard() {
           }}>
             Welcome back, {candidate.firstName}
           </h1>
+
+          <div className="text-center mb-6">
+  <button
+    onClick={() => signOut({ callbackUrl: "/login" })}
+    className="px-6 py-2 text-white rounded-full shadow-md hover:shadow-lg transition-all duration-300"
+    style={{ background: 'linear-gradient(135deg, #ed3237 0%, #c5292e 100%)' }}
+  >
+    Logout
+  </button>
+</div>
           <p className="text-lg" style={{ color: '#848688' }}>
             Track your application progress and upcoming activities
           </p>
@@ -137,8 +229,13 @@ export default function CandidateDashboard() {
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {getIconSvg(stageInfo.icon)}
               </svg>
-              <span className="font-medium">{candidate.stage}</span>
+              <span className="font-medium">{currentStage}</span>
             </div>
+          </div>
+
+          {/* Stage Message */}
+          <div className="mb-6 p-4 rounded-xl" style={{ backgroundColor: '#f8f9fa' }}>
+            <p style={{ color: '#373435' }}>{getStageMessage(currentStage)}</p>
           </div>
 
           {/* Progress Bar */}
@@ -183,99 +280,225 @@ export default function CandidateDashboard() {
 
         {/* Assessment Results */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-         {/* In-house Test */}
-{candidate.score !== null && (
+          {/* In-house Test */}
+          {candidate.score !== null && (
+            <div className="bg-white/95 backdrop-blur-sm shadow-xl rounded-2xl p-6 border border-white/30">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold" style={{ color: '#373435' }}>In-house Assessment</h3>
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${(candidate.score >= 70 && candidate.passed !== false) ? 'bg-green-100' : 'bg-red-100'}`}>
+                  <svg className={`w-6 h-6 ${(candidate.score >= 70 && candidate.passed !== false) ? 'text-green-600' : 'text-red-600'}`} 
+                       fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {(candidate.score >= 70 && candidate.passed !== false)
+                      ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /> 
+                      : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    }
+                  </svg>
+                </div>
+              </div>
+              <div className="text-center">
+                <div className={`text-4xl font-bold mb-2 ${(candidate.score >= 70 && candidate.passed !== false) ? 'text-green-600' : 'text-red-600'}`}>
+                  {candidate.score}%
+                </div>
+                <p className={`font-medium ${(candidate.score >= 70 && candidate.passed !== false) ? 'text-green-800' : 'text-red-800'}`}>
+                  {(candidate.score >= 70 && candidate.passed !== false) ? 'Passed' : 'Failed'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* NBC Assessment */}
+{/* NBC Assessment */}
+{candidate.nbcAssessmentDate !== null && (
   <div className="bg-white/95 backdrop-blur-sm shadow-xl rounded-2xl p-6 border border-white/30">
     <div className="flex items-center justify-between mb-4">
-      <h3 className="text-xl font-bold" style={{ color: '#373435' }}>In-house Assessment</h3>
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${candidate.score >= 70 ? 'bg-green-100' : 'bg-red-100'}`}>
-        <svg className={`w-6 h-6 ${candidate.score >= 70 ? 'text-green-600' : 'text-red-600'}`} 
-             fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          {candidate.score >= 70 
-            ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /> 
-            : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-          }
+      <h3 className="text-xl font-bold" style={{ color: '#373435' }}>NBC Assessment</h3>
+      <div
+        className={`w-12 h-12 rounded-full flex items-center justify-center ${
+          candidate.nbcPassed === null
+            ? "bg-yellow-100"
+            : candidate.nbcPassed
+            ? "bg-green-100"
+            : "bg-red-100"
+        }`}
+      >
+        <svg
+          className={`w-6 h-6 ${
+            candidate.nbcPassed === null
+              ? "text-yellow-600"
+              : candidate.nbcPassed
+              ? "text-green-600"
+              : "text-red-600"
+          }`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          {candidate.nbcPassed === null ? (
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" // clock icon
+            />
+          ) : candidate.nbcPassed ? (
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M5 13l4 4L19 7" // check icon
+            />
+          ) : (
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M6 18L18 6M6 6l12 12" // x icon
+            />
+          )}
         </svg>
       </div>
     </div>
-    <div className="text-center">
-      <div className={`text-4xl font-bold mb-2 ${candidate.score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
-        {candidate.score}%
-      </div>
-      <p className={`font-medium ${candidate.score >= 70 ? 'text-green-800' : 'text-red-800'}`}>
-        {candidate.score >= 70 ? 'Passed' : 'Failed'}
+
+    <div className="mb-4">
+      <p className="text-sm mb-1" style={{ color: '#848688' }}>Assessment Date</p>
+      <p className="font-medium" style={{ color: '#373435' }}>
+        {new Date(candidate.nbcAssessmentDate).toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
       </p>
+    </div>
+
+    <p
+      className={`font-medium text-center ${
+        candidate.nbcPassed === null
+          ? "text-yellow-800"
+          : candidate.nbcPassed
+          ? "text-green-800"
+          : "text-red-800"
+      }`}
+    >
+      {candidate.nbcPassed === null
+        ? "Pending"
+        : candidate.nbcPassed
+        ? "Passed"
+        : "Failed"}
+    </p>
+  </div>
+)}
+
+        </div>
+
+        {/* Upcoming Activities */}
+        <div className="space-y-6">
+{/* Interview */}
+{candidate.nbcPassed && (
+  <div className="bg-white/95 backdrop-blur-sm shadow-xl rounded-2xl p-6 border border-white/30">
+    <div className="flex items-center mb-4">
+      <div
+        className="w-12 h-12 rounded-full flex items-center justify-center mr-4"
+        style={{
+          backgroundColor:
+            candidate.interviewPassed === null
+              ? "#f59e0b" // yellow for pending
+              : candidate.interviewPassed
+              ? "#10b981" // green for pass
+              : "#dc2626", // red for fail
+        }}
+      >
+        <svg
+          className="w-6 h-6 text-white"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          {candidate.interviewPassed === null ? (
+            // clock
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          ) : candidate.interviewPassed ? (
+            // check
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M5 13l4 4L19 7"
+            />
+          ) : (
+            // X
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M6 18L18 6M6 6l12 12"
+            />
+          )}
+        </svg>
+      </div>
+
+      <div className="flex-1">
+        <h3 className="text-xl font-bold" style={{ color: "#373435" }}>
+          {candidate.interviewPassed === null
+            ? candidate.interviewDate
+              ? "Interview Scheduled"
+              : "Interview Pending"
+            : candidate.interviewPassed
+            ? "Interview Passed"
+            : "Interview Failed"}
+        </h3>
+
+        {/* Show interview date if scheduled */}
+        {candidate.interviewDate && (
+          <p style={{ color: "#848688" }}>
+            {new Date(candidate.interviewDate).toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        )}
+
+        {/* Show interview comment if available */}
+        {candidate.interviewComment && (
+          <p
+            className="mt-2 text-sm italic"
+            style={{ color: "#848688" }}
+          >
+            Feedback: "{candidate.interviewComment}"
+          </p>
+        )}
+      </div>
+
+      {/* Join button if link exists */}
+      {candidate.interviewLink && candidate.interviewPassed === null && (
+        <a
+          href={candidate.interviewLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-6 py-3 rounded-xl font-medium text-white transform hover:scale-105 transition-all duration-200"
+          style={{
+            background: "linear-gradient(135deg, #ed3237 0%, #c5292e 100%)",
+          }}
+        >
+          Join Interview
+        </a>
+      )}
     </div>
   </div>
 )}
 
 
-          {/* NBC Assessment */}
-          {candidate.nbcPassed !== null && (
-            <div className="bg-white/95 backdrop-blur-sm shadow-xl rounded-2xl p-6 border border-white/30">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold" style={{ color: '#373435' }}>NBC Assessment</h3>
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${candidate.nbcPassed ? 'bg-green-100' : 'bg-red-100'}`}>
-                  <svg className={`w-6 h-6 ${candidate.nbcPassed ? 'text-green-600' : 'text-red-600'}`} 
-                       fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    {candidate.nbcPassed ? 
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /> :
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    }
-                  </svg>
-                </div>
-              </div>
-              <div className="mb-4">
-                <p className="text-sm mb-1" style={{ color: '#848688' }}>Assessment Date</p>
-                <p className="font-medium" style={{ color: '#373435' }}>
-                  {new Date(candidate.nbcAssessmentDate).toLocaleDateString('en-US', { 
-                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                    hour: '2-digit', minute: '2-digit'
-                  })}
-                </p>
-              </div>
-              <p className={`font-medium text-center ${candidate.nbcPassed ? 'text-green-800' : 'text-red-800'}`}>
-                {candidate.nbcPassed ? 'Passed' : 'Failed'}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Upcoming Activities */}
-        <div className="space-y-6">
-          {/* Interview */}
-          {candidate.interviewDate && (
-            <div className="bg-white/95 backdrop-blur-sm shadow-xl rounded-2xl p-6 border border-white/30">
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 rounded-full flex items-center justify-center mr-4"
-                     style={{ backgroundColor: '#f59e0b' }}>
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold" style={{ color: '#373435' }}>Interview Scheduled</h3>
-                  <p style={{ color: '#848688' }}>
-                    {new Date(candidate.interviewDate).toLocaleDateString('en-US', { 
-                      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                      hour: '2-digit', minute: '2-digit'
-                    })}
-                  </p>
-                </div>
-                {candidate.interviewLink && (
-                  <a
-                    href={candidate.interviewLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-6 py-3 rounded-xl font-medium text-white transform hover:scale-105 transition-all duration-200"
-                    style={{ background: 'linear-gradient(135deg, #ed3237 0%, #c5292e 100%)' }}
-                  >
-                    Join Interview
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Training */}
           {candidate.trainingDate && (

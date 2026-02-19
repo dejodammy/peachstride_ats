@@ -3,7 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import formidable, { Fields, Files } from "formidable";
 import fs from "fs";
 import path from "path";
-import { prisma } from "../../../lib/prisma";
+import { prisma } from "../../lib/prisma";
 
 export const config = { api: { bodyParser: false } };
 

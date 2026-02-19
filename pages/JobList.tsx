@@ -2,54 +2,39 @@ import { useEffect, useState } from "react";
 import "tailwindcss/tailwind.css";
 
 export default function JobList() {
+  const [jobs, setJobs] = useState([]);
+  const [filteredJobs, setFilteredJobs] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
-  const [filteredJobs, setFilteredJobs] = useState([]);
 
-  const jobs = [
-    {
-      id: 1,
-      title: "Business Developer",
-      description: "Identify and develop new business opportunities to drive company growth and expansion.",
-      location: "Lagos",
-      type: "Full-time",
-      department: "Business Development",
-      posted: "2 days ago",
-      requirements: ["3+ years experience", "Strong communication skills", "Business acumen"]
-    },
-    {
-      id: 2,
-      title: "Open Market Sales Representative",
-      description: "Drive sales growth through market penetration and customer relationship management.",
-      location: "Remote",
-      type: "Full-time",
-      department: "Sales",
-      posted: "5 days ago",
-      requirements: ["Sales experience", "Self-motivated", "Target-driven mindset"]
-    },
-    {
-      id: 3,
-      title: "Vehicle Sales Representative",
-      description: "Develop and maintain customer relationships in the automotive sector.",
-      location: "Abuja",
-      type: "Full-time",
-      department: "Sales",
-      posted: "1 week ago",
-      requirements: ["Automotive knowledge", "Customer service skills", "Valid driver's license"]
-    },
-  ];
+  // 🔹 Fetch from your database
+  useEffect(() => {
+    async function fetchJobs() {
+      try {
+        const res = await fetch("/api/jobs");
+        const data = await res.json();
+        setJobs(data);
+        setFilteredJobs(data);
+      } catch (error) {
+        console.error("Error fetching jobs:", error);
+      }
+    }
+    fetchJobs();
+  }, []);
 
+  // 🔹 Filter logic
   useEffect(() => {
     let filtered = jobs.filter(job => {
       const matchesSearch = job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           job.description.toLowerCase().includes(searchTerm.toLowerCase());
+                            job.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesLocation = !locationFilter || job.location === locationFilter;
       return matchesSearch && matchesLocation;
     });
     setFilteredJobs(filtered);
-  }, [searchTerm, locationFilter]);
+  }, [searchTerm, locationFilter, jobs]);
 
   const locations = [...new Set(jobs.map(job => job.location))];
+
 
   return (
     <div className="min-h-screen" style={{ 
@@ -203,21 +188,20 @@ export default function JobList() {
                   <div className="text-sm" style={{ color: '#848688' }}>
                     Ready to join our team?
                   </div>
-                  <a
-                    href="/apply"
-                    className="px-6 py-3 rounded-xl font-medium text-white transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center"
-                    style={{ 
-                      background: 'linear-gradient(135deg, #ed3237 0%, #c5292e 100%)',
-                      textDecoration: 'none'
-                    }}
-                    onMouseEnter={(e) => e.target.style.background = 'linear-gradient(135deg, #c5292e 0%, #b02429 100%)'}
-                    onMouseLeave={(e) => e.target.style.background = 'linear-gradient(135deg, #ed3237 0%, #c5292e 100%)'}
-                  >
-                    Apply Now
-                    <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </a>
+<a 
+  href={`/apply?jobId=${job.id}`} 
+  className="px-6 py-3 rounded-xl font-medium text-white transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center"
+  style={{ 
+    background: 'linear-gradient(135deg, #ed3237 0%, #c5292e 100%)',
+    textDecoration: 'none'
+  }}
+>
+  Apply Now
+  <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+  </svg>
+</a>
+
                 </div>
               </div>
             ))
